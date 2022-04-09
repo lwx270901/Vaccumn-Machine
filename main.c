@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include "sr04.h"
 
 /* USER CODE END Includes */
 
@@ -46,6 +47,7 @@
 /* Private variables ---------------------------------------------------------*/
  TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 
@@ -59,6 +61,7 @@ static void MX_GPIO_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -106,6 +109,7 @@ float beta = 0;
 float gama = 0;
 unsigned short Output = 0;
 unsigned short LastOutput = 0;
+int time_count = 0;
 
 int PIDLienTuc(int Output, int tocdodat, int tocdothuc);
 int PIDRoiRac(int tocdodat, int tocdothuc);
@@ -117,6 +121,15 @@ unsigned short last_error1 = 0;
 void HienThi(void);
 
 
+//SR04
+#define REAL_TIME_SYSTEM    20
+unsigned char flag_timer;
+void SetTimer_ms(unsigned int ms);
+unsigned int timer_value = 0;
+unsigned int timer_cnt = 0;
+int timer_MUL = 0;
+unsigned char flag_timer = 0;
+uint16_t real_distance = 0;
 
 
 /* USER CODE END 0 */
@@ -152,7 +165,16 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_USART2_UART_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
+
+  HAL_TIM_Base_Start_IT (& htim3 );
+    init_sr04();
+    SetTimer_ms(REAL_TIME_SYSTEM);
+
+
+
+
   HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_1 | TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
@@ -168,6 +190,30 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  while (!flag_timer);
+	  	  flag_timer = 0;
+	  	  real_distance = GetDistance();
+	  	  real_distance = real_distance / 2 + 2;
+
+	  	 if(real_distance < 5)
+	  	 {
+	  		 tocdodat = 50;
+	  		 //turn right
+	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
+	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
+	  		time_count= 0;
+	  		if(time_count == 1000)
+	  		{
+	  			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+	  			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
+	  			time_count = 0;
+	  		}
+	  	 }
+
+
+
+
 	  if(HAL_GetTick() - last >= T)//100ms
 	  {
 		  //PID lientuc
@@ -339,6 +385,51 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 71;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 999;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -386,18 +477,42 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_2, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_5, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PB1 PB2 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2;
+  /*Configure GPIO pins : PB1 PB2 PB5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : PA10 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
 }
 
 /* USER CODE BEGIN 4 */
+
+void HAL_TIM_PeriodElapsedCallback ( TIM_HandleTypeDef * htim )
+{
+	timer_cnt++;
+	    if (timer_cnt >= timer_MUL)
+	    {
+	        timer_cnt = 0;
+	        flag_timer = 1;
+	    }
+	    sr04_countdown();
+	    time_count++;
+}
+void SetTimer_ms(unsigned int ms)
+{
+	timer_MUL = ms;
+	timer_cnt = 0;
+	flag_timer = 0;
+}
 
 void HienThi(void)
 {

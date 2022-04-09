@@ -1,7 +1,7 @@
 /*
  * sr04.h
  *
- *  Created on: Apr 1, 2022
+ *  Created on: Apr 9, 2022
  *      Author: ADMIN
  */
 
@@ -14,7 +14,7 @@
 #define SR04_TRIGGER_Pin           		GPIO_PIN_5
 
 #define SR04_ECHO_GPIO             		GPIOA
-#define SR04_ECHO_Pin           		GPIO_PIN_8
+#define SR04_ECHO_Pin           		GPIO_PIN_10
 
 extern uint16_t sr04_distance;
 extern uint16_t sr04_timeout;

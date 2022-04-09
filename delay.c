@@ -1,9 +1,6 @@
-/*
- * delay.c
- *
- *  Created on: Apr 1, 2022
- *      Author: ADMIN
- */
+
+
+
 #include "delay.h"
 
 volatile uint16_t delay_cnt = 0;

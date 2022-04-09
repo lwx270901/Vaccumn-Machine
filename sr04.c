@@ -1,7 +1,7 @@
 /*
  * sr04.c
  *
- *  Created on: Apr 1, 2022
+ *  Created on: Apr 9, 2022
  *      Author: ADMIN
  */
 
@@ -88,4 +88,3 @@ uint16_t GetDistance(void)
     sr04_distance = sr04_distance * 20 / 50;
     return sr04_distance;
 }
-

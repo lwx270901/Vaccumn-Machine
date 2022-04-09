@@ -1,9 +1,4 @@
-/*
- * delay.h
- *
- *  Created on: Apr 1, 2022
- *      Author: ADMIN
- */
+
 
 #ifndef INC_DELAY_H_
 #define INC_DELAY_H_
