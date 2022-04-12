@@ -1,13 +1,10 @@
-
-
-
 #include "delay.h"
 
 volatile uint16_t delay_cnt = 0;
 
 void delay_ms(unsigned int value)
 {
-	if (delay_cnt == 0)
+	if (delay_cnt == 0) 
 	{
 		delay_cnt = value;
 	}

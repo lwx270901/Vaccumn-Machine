@@ -1,20 +1,15 @@
-/*
- * sr04.h
- *
- *  Created on: Apr 9, 2022
- *      Author: ADMIN
- */
+#ifndef __SR04_H
+#define __SR04_H 			   
 
-#ifndef INC_SR04_H_
-#define INC_SR04_H_
-
-#include "stm32f4xx.h"
+#include "stm32f10x.h"
 
 #define SR04_TRIGGER_GPIO             	GPIOB
-#define SR04_TRIGGER_Pin           		GPIO_PIN_5
+#define SR04_TRIGGER_GPIO_CLK           RCC_APB2Periph_GPIOB
+#define SR04_TRIGGER_Pin           		GPIO_Pin_5
 
 #define SR04_ECHO_GPIO             		GPIOA
-#define SR04_ECHO_Pin           		GPIO_PIN_10
+#define SR04_ECHO_GPIO_CLK         		RCC_APB2Periph_GPIOA
+#define SR04_ECHO_Pin           		GPIO_Pin_8
 
 extern uint16_t sr04_distance;
 extern uint16_t sr04_timeout;
@@ -22,6 +17,5 @@ extern uint16_t sr04_timeout;
 void init_sr04(void);
 void trigger_pulse(void);
 void sr04_countdown(void);
-uint16_t GetDistance(void);
-
-#endif /* INC_SR04_H_ */
+void GetDistance(void);
+#endif

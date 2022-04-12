@@ -1,580 +1,450 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2022 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "math.h"      
+#include "string.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-#include "stdio.h"
-#include <stdbool.h>
-#include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
-#include "sr04.h"
+void ControlMotor(void);
+void ResponseSensorValue(void);
+void ResponseDistanceValue(void);
+void ResetEncoderPulse(void);
+void ResponseEnncoderPulse(void);
+void ControlRGBLed(void);
+void ControlLed(void);
+void ControlServo(void);
+void MicrobitProcess(void);
+void ServoTesting(void);
 
-/* USER CODE END Includes */
+uint16_t startIndex = 0;
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
- TIM_HandleTypeDef htim1;
-TIM_HandleTypeDef htim2;
-TIM_HandleTypeDef htim3;
-
-UART_HandleTypeDef huart2;
-
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
-void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_TIM1_Init(void);
-static void MX_TIM2_Init(void);
-static void MX_USART2_UART_Init(void);
-static void MX_TIM3_Init(void);
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-#ifdef __GNUC__
-		#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
-#else
-		#define PUTCHAR_PROTOTYPE int fput(ch, FILE *f)
-#endif
-
-
-PUTCHAR_PROTOTYPE
-{
-	HAL_UART_Transmit(&huart2, (uint8_t *)ch, 1, 0xFFFF);
-	return ch;
-}
-
-long last = 0;
-unsigned short encoder_xung = 0;
-unsigned short last_encoder_xung = 0;
-
-unsigned short xungls = 0;
-unsigned short vongls = 0;
-unsigned short vonglp = 0;
-
-unsigned short lastxung = 0;
-unsigned short xung = 0;
-
-long T = 100;
-unsigned short tocdodat = 300;
-unsigned short tocdothuc = 0;
-//PID lien tuc p = 0.017, d= 0.08, T= 100
-//PID roi rac
-float Kp = 0.017;
-float Kd = 0.08;
-float Ki = 0;
-long E = 0;
-long E1 = 0;
-long E2 = 0;
-float alpha = 0;
-float beta = 0;
-float gama = 0;
-unsigned short Output = 0;
-unsigned short LastOutput = 0;
-int time_count = 0;
-
-int PIDLienTuc(int Output, int tocdodat, int tocdothuc);
-int PIDRoiRac(int tocdodat, int tocdothuc);
-unsigned short i = 0;
-
-unsigned short error1 = 0;
-unsigned short last_error1 = 0;
-
-void HienThi(void);
-
-
-//SR04
-#define REAL_TIME_SYSTEM    20
-unsigned char flag_timer;
-void SetTimer_ms(unsigned int ms);
-unsigned int timer_value = 0;
-unsigned int timer_cnt = 0;
-int timer_MUL = 0;
-unsigned char flag_timer = 0;
-uint16_t real_distance = 0;
-
-
-/* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
 int main(void)
+{   
+    uint16_t cnt = 0, angle = 0;
+//    LockChip();
+
+    init_system();
+
+    printf("\rAI Robot\r\n");
+    
+    EnableWatchdogTimer();
+    
+    SetSpeed(FRONT,60, 60);
+    SetSpeed(REAR, 60, 60);
+    delay_ms(500);
+    SetSpeed(FRONT,0, 0);
+    SetSpeed(REAR, 0, 0);
+    while (1)
+    {
+        while (!flag_timer);
+        flag_timer = 0;
+        
+        BlinkLed();
+
+        GetADC();
+        GetDistance();
+//        cnt = (cnt + 1)%(1000/REAL_TIME_SYSTEM);
+//        if (cnt == 0)
+//        {
+//            angle = angle + 10;
+//            if (angle > 180)
+//                angle = 0;
+//            servo_angle(SERVO_2, angle);
+//        }
+        MicrobitProcess();
+        
+        WatchdogTimerReload();
+    }
+}
+
+void init_system(void)    
 {
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
-  SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_TIM1_Init();
-  MX_TIM2_Init();
-  MX_USART2_UART_Init();
-  MX_TIM3_Init();
-  /* USER CODE BEGIN 2 */
-
-  HAL_TIM_Base_Start_IT (& htim3 );
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO,ENABLE);
+    GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable, ENABLE);
+    GPIO_PinRemapConfig(GPIO_Remap_PD01, ENABLE);   
+    
+    HSI_SetSysClk(RCC_PLLMul_6);   //PLLCLK = 8 / 2 * 6 = 24 Mhz
+    
+    init_led();
+    init_timer();
+	SetTimer_ms(REAL_TIME_SYSTEM);
+    
+	USART1_Init(115200);
+    USART2_Init(9600);
+    
+    init_adc();
+    init_encoder_1_wire();
+    init_pwm();
+    init_motor();
     init_sr04();
-    SetTimer_ms(REAL_TIME_SYSTEM);
-
-
-
-
-  HAL_TIM_Encoder_Start(&htim1, TIM_CHANNEL_1 | TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-
-  htim2.Instance -> CCR1 = 0;
-  last = HAL_GetTick();
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-
-	  while (!flag_timer);
-	  	  flag_timer = 0;
-	  	  real_distance = GetDistance();
-	  	  real_distance = real_distance / 2 + 2;
-
-	  	 if(real_distance < 5)
-	  	 {
-	  		 tocdodat = 50;
-	  		 //turn right
-	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-	  		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
-	  		time_count= 0;
-	  		if(time_count == 1000)
-	  		{
-	  			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
-	  			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-	  			time_count = 0;
-	  		}
-	  	 }
-
-
-
-
-	  if(HAL_GetTick() - last >= T)//100ms
-	  {
-		  //PID lientuc
-		  last = HAL_GetTick();
-		  encoder_xung = __HAL_TIM_GET_COUNTER(&htim1);
-		  __HAL_TIM_SET_COUNTER(&htim1, 0);
-
-		  tocdothuc = ((encoder_xung) * (60 * (1000/T))) / (4*400);
-		  Output = PIDLienTuc(Output, tocdodat, tocdothuc);//Tinh toan PID
-		  htim2.Instance->CCR1 = Output; // Xuat xung PWM
-		  HienThi();
-	  }
-  }
-  /* USER CODE END 3 */
+    init_servo();
+    
+    SetLedRGB(RED);
+    delay_ms(300);
+    SetLedRGB(GREEN);
+    delay_ms(300);
+    SetLedRGB(BLUE);
+    delay_ms(300);
+    SetLedRGB(WHITE);
+    
+    init_watchdog(WATCHDOG_Timeout_1s);
+    
 }
 
-/**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
+void HSI_SetSysClk(uint32_t RCC_PLLMul_x)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-
-  /** Configure the main internal regulator output voltage
-  */
-  __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 25;
-  RCC_OscInitStruct.PLL.PLLN = 144;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 4;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_Encoder_InitTypeDef sConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
-  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
-  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
-  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC1Filter = 0;
-  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
-  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
-  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 0;
-  if (HAL_TIM_Encoder_Init(&htim1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-
-}
-
-/**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 1399;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 999;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
-  HAL_TIM_MspPostInit(&htim2);
-
-}
-
-/**
-  * @brief TIM3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM3_Init(void)
-{
-
-  /* USER CODE BEGIN TIM3_Init 0 */
-
-  /* USER CODE END TIM3_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM3_Init 1 */
-
-  /* USER CODE END TIM3_Init 1 */
-  htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 71;
-  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 999;
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM3_Init 2 */
-
-  /* USER CODE END TIM3_Init 2 */
-
-}
-
-/**
-  * @brief USART2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART2_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART2_Init 0 */
-
-  /* USER CODE END USART2_Init 0 */
-
-  /* USER CODE BEGIN USART2_Init 1 */
-
-  /* USER CODE END USART2_Init 1 */
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART2_Init 2 */
-
-  /* USER CODE END USART2_Init 2 */
-
-}
-
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_5, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : PB1 PB2 PB5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PA10 */
-  GPIO_InitStruct.Pin = GPIO_PIN_10;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-}
-
-/* USER CODE BEGIN 4 */
-
-void HAL_TIM_PeriodElapsedCallback ( TIM_HandleTypeDef * htim )
-{
-	timer_cnt++;
-	    if (timer_cnt >= timer_MUL)
-	    {
-	        timer_cnt = 0;
-	        flag_timer = 1;
-	    }
-	    sr04_countdown();
-	    time_count++;
-}
-void SetTimer_ms(unsigned int ms)
-{
-	timer_MUL = ms;
-	timer_cnt = 0;
-	flag_timer = 0;
-}
-
-void HienThi(void)
-{
-	i++;
-	if(i >= 5)
+	__IO uint32_t HSIStatus = 0;
+	
+	 // Reset the RCC register to the reset value
+	RCC_DeInit();	
+ 
+	 // Enable HSI 
+	RCC_HSICmd(ENABLE);
+	
+	HSIStatus = RCC->CR & RCC_CR_HSIRDY;
+	
+	if( HSIStatus == RCC_CR_HSIRDY )
 	{
-		i = 0;
-		printf("tocdothuc = %d,tocdodat=%d, encoder_xung=%d,Output=%d\r\n",tocdothuc,tocdodat,encoder_xung, Output);
-	}
-}
-
-int PIDLienTuc(int Output, int tocdodat, int tocdothuc)
-{
-	float outpid = 0;
-	error1 = abs(tocdodat) - abs(tocdothuc);
-	outpid = (Kp * error1) + (Kd * (error1 - last_error1));
-	last_error1 = error1;
-	if(Output + outpid >= 999)
-	{
-		Output = 999;
-	}
-	else if(Output + outpid < 0)
-	{
-		Output = 0;
+		// Enable prefetch
+		FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
+		FLASH_SetLatency(FLASH_Latency_2);
+		
+		RCC_HCLKConfig(RCC_SYSCLK_Div1);
+		RCC_PCLK1Config(RCC_HCLK_Div2);
+		RCC_PCLK2Config(RCC_HCLK_Div1);
+		
+		 // Configure PLLCLK = PLL_HSI * RCC_PLLMul_x
+        RCC_PLLConfig(RCC_PLLSource_HSI_Div2, RCC_PLLMul_x);
+		
+         // Enable PLL
+		RCC_PLLCmd(ENABLE);
+		
+		 // Wait for the PLL to stabilize
+		while( RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET );
+		
+         // Select the system clock
+		RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
+		
+        while( RCC_GetSYSCLKSource() != 0x08 );
 	}
 	else
-	{
-		Output = Output + outpid;
+    {
+		 /* If the HSI fails to start, the user can add a code to handle the error here */
 	}
-	return Output;
 }
 
-/* USER CODE END 4 */
-
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
+void SetSysClockTo24Mhz(void)   //24Mhz
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
+    RCC_ClocksTypeDef RCC_ClockFreq;
+    ErrorStatus HSEStartUpStatus;
+    
+    /* SYSCLK, HCLK, PCLK2 and PCLK1 configuration -----------------------------*/   
+    /* RCC system reset(for debug purpose) */
+    RCC_DeInit();
+
+    /* Enable HSE */
+    RCC_HSEConfig(RCC_HSE_ON);
+
+    /* Wait till HSE is ready */
+    HSEStartUpStatus = RCC_WaitForHSEStartUp();
+
+    if (HSEStartUpStatus == SUCCESS)
+    {
+		RCC_HCLKConfig(RCC_SYSCLK_Div256); 
+		RCC_PCLK2Config(RCC_HCLK_Div1); 
+		RCC_PCLK1Config(RCC_HCLK_Div1);
+
+		/* PLLCLK = 16MHz / 2 * 3 = 24 MHz */
+		RCC_PLLConfig(RCC_PREDIV1_Div2, RCC_PLLMul_3);
+
+		/* Enable PLL */ 
+		RCC_PLLCmd(ENABLE);
+
+		/* Wait till PLL is ready */
+		while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);
+
+		/* Select PLL as system clock source */
+		RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
+
+		/* Wait till PLL is used as system clock source */
+		while (RCC_GetSYSCLKSource() != 0x08);
+    }
+    else
+    { /* If HSE fails to start-up, the application will have wrong clock configuration.
+       User can add here some code to deal with this error */    
+    }
+
+    /* This function fills the RCC_ClockFreq structure with the current
+     frequencies of different on chip clocks (for debug purpose) */
+    RCC_GetClocksFreq(&RCC_ClockFreq);
+
+    /* Enable Clock Security System(CSS): this will generate an NMI exception
+     when HSE clock fails */
+    RCC_ClockSecuritySystemCmd(ENABLE);     
 }
 
-#ifdef  USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
+
+void Testing(void)
 {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
+    uint8_t i = 0;
+    static uint8_t cnt = 0;
+    static uint16_t old_distance = 0;
+    
+    for (i = 0; i < 2; i++)
+    {
+        if (pulseBase[i] != encoderPulse[i])
+        {
+            pulseBase[i] = encoderPulse[i];
+            printf("Pulse %d: %d\r\n", i + 1, encoderPulse[i]);
+        }
+    }
+    
+    if (old_distance != sr04_distance)
+    {
+        old_distance = sr04_distance;
+        printf("Distance : %d\r\n", sr04_distance);
+    }
+    
+    cnt = (cnt + 1)%(1000/REAL_TIME_SYSTEM);
+    if (cnt == 0)
+    {
+        printf("ADC : %d, %d, %d, %d\r\n", adc_value[0], adc_value[1], adc_value[2], adc_value[3]);
+        printf("Sensor: 0x%02x\r\n", sensor_value);
+    }
 }
-#endif /* USE_FULL_ASSERT */
+
+void MicrobitProcess(void)
+{
+    uint8_t i = 0;
+    if (flagReceiveComplete == 1)
+    {
+        printf("flag\r\n");
+        for (i = 0; i < indexOfDataReceive; i++)
+            USART1_SendChar(bufferOfDataReceive[i]);
+        flagReceiveComplete = 0;
+        if (bufferOfDataReceive[indexOfDataReceive - 17] == 'm')
+        {
+            startIndex = indexOfDataReceive - 17;
+            ControlMotor();
+        }
+        else if (bufferOfDataReceive[indexOfDataReceive - 1] == 's')
+        {
+            startIndex = indexOfDataReceive - 1;
+            ResponseSensorValue();
+        }
+        else if (bufferOfDataReceive[indexOfDataReceive - 1] == 'd')
+        {
+            startIndex = indexOfDataReceive - 1;
+            ResponseDistanceValue();
+        }
+        else if (bufferOfDataReceive[indexOfDataReceive - 1] == 'r')
+        {
+            startIndex = indexOfDataReceive - 1;
+            ResetEncoderPulse();
+        }
+        else if (bufferOfDataReceive[indexOfDataReceive - 1] == 'e')
+        {
+            startIndex = indexOfDataReceive - 1;
+            ResponseEnncoderPulse();
+        }
+        else if (bufferOfDataReceive[indexOfDataReceive - 9] == 'j')
+        {
+            startIndex = indexOfDataReceive - 9;
+            ControlServo();
+        }
+        else if (bufferOfDataReceive[indexOfDataReceive - 2] == 'l')
+        {
+            startIndex = indexOfDataReceive - 2;
+            ControlRGBLed();
+        }
+        else if (bufferOfDataReceive[indexOfDataReceive - 5] == 'b')
+        {
+            startIndex = indexOfDataReceive - 5;
+            ControlLed();
+        }
+        
+        indexOfDataReceive = 0;
+    }
+    
+    
+}
+
+void MicrobitSendChar(char chr)
+{
+	USART2_SendChar(chr);  
+}
+
+void MicrobitSendString(char* str)
+{
+	while(*str)	
+	{
+		MicrobitSendChar(*str++);
+	}
+}
+
+void MicrobitSendNum(long num)
+{
+    char _sNum[15];
+    sprintf(_sNum, "%ld", num);
+    
+    MicrobitSendString(_sNum);
+}
+
+void MicrobitSendNum3Digit(long num)
+{
+    MicrobitSendNum(num/100%10);
+    MicrobitSendNum(num/10%10);
+    MicrobitSendNum(num/1%10);
+}
+
+void ControlMotor(void)
+{
+    static int16_t front_left_speed = 0, front_right_speed = 0;
+    static int16_t rear_left_speed = 0, rear_right_speed = 0;
+    
+    front_left_speed = (bufferOfDataReceive[startIndex + 2] - '0') * 100 + (bufferOfDataReceive[startIndex + 3] - '0') * 10 + (bufferOfDataReceive[startIndex + 4] - '0');
+    front_right_speed = (bufferOfDataReceive[startIndex + 6] - '0') * 100 + (bufferOfDataReceive[startIndex + 7] - '0') * 10 + (bufferOfDataReceive[startIndex + 8] - '0');
+    
+    rear_left_speed = (bufferOfDataReceive[startIndex + 10] - '0') * 100 + (bufferOfDataReceive[startIndex + 11] - '0') * 10 + (bufferOfDataReceive[startIndex + 12] - '0');
+    rear_right_speed = (bufferOfDataReceive[startIndex + 14] - '0') * 100 + (bufferOfDataReceive[startIndex + 15] - '0') * 10 + (bufferOfDataReceive[startIndex + 16] - '0');
+    
+    if (front_left_speed > 200)
+        front_left_speed = 100;
+    if (front_right_speed > 200)
+        front_right_speed = 100;
+    
+    if (rear_left_speed > 200)
+        rear_left_speed = 100;
+    if (rear_right_speed > 200)
+        rear_right_speed = 100;
+    
+//    printf("Front Speed: %d, %d\r\n", front_left_speed, front_right_speed);
+//    printf("Rear Speed: %d, %d\r\n", rear_left_speed, rear_right_speed);
+   
+    SetSpeed(FRONT, front_left_speed - 100, front_right_speed - 100);
+    SetSpeed(REAR, rear_left_speed - 100, rear_right_speed - 100);
+}
+
+void ResponseSensorValue(void)
+{
+    uint16_t sensor_1, sensor_2, sensor_3, sensor_4;
+    
+    // Get 8-bit ADC
+    sensor_1 = adc_value[0]/4;
+    sensor_2 = adc_value[1]/4;
+    sensor_3 = adc_value[2]/4;
+    sensor_4 = adc_value[3]/4;
+    
+    // Send data
+    MicrobitSendNum3Digit(sensor_1);
+    MicrobitSendChar(':');
+    MicrobitSendNum3Digit(sensor_2);
+    MicrobitSendChar(':');
+    MicrobitSendNum3Digit(sensor_3);
+    MicrobitSendChar(':');
+    MicrobitSendNum3Digit(sensor_4);
+    MicrobitSendString("\r\n");
+}
+
+void ResponseDistanceValue(void)
+{   
+    MicrobitSendNum(sr04_distance);
+    MicrobitSendString("\r\n");
+}
+
+void ResetEncoderPulse(void)
+{
+    encoderPulse[0] = 0;
+    encoderPulse[1] = 0;
+    encoderPulse[2] = 0;
+    encoderPulse[3] = 0;
+}
+
+void ResponseEnncoderPulse(void)
+{   
+    uint16_t pulse_1, pulse_2, pulse_3, pulse_4;
+    
+    // Get encoder pulse
+    pulse_1 = encoderPulse[0]%1000;
+    pulse_2 = encoderPulse[1]%1000;
+    pulse_3 = encoderPulse[2]%1000;
+    pulse_4 = encoderPulse[3]%1000;
+    
+    // Send data
+    MicrobitSendNum3Digit(pulse_1);
+    MicrobitSendChar(':');
+    MicrobitSendNum3Digit(pulse_2);
+    MicrobitSendChar(':');
+    MicrobitSendNum3Digit(pulse_3);
+    MicrobitSendChar(':');
+    MicrobitSendNum3Digit(pulse_4);
+    MicrobitSendString("\r\n");
+}
+
+void ControlRGBLed(void)
+{
+    if (bufferOfDataReceive[startIndex + 1] == '1')
+    {
+        SetLedRGB(RED);
+    }
+    else if (bufferOfDataReceive[startIndex + 1] == '2')
+    {
+        SetLedRGB(GREEN);
+    }
+    else if (bufferOfDataReceive[startIndex + 1] == '3')
+    {
+        SetLedRGB(BLUE);
+    }
+    else if (bufferOfDataReceive[startIndex + 1] == '4')
+    {
+        SetLedRGB(YELLOW);
+    }
+    else if (bufferOfDataReceive[startIndex + 1] == '5')
+    {
+        SetLedRGB(CYAN);
+    }
+    else if (bufferOfDataReceive[startIndex + 1] == '6')
+    {
+        SetLedRGB(MAGENTA);
+    }
+    else if (bufferOfDataReceive[startIndex + 1] == '7')
+    {
+        SetLedRGB(WHITE);
+    }   
+}
+
+void ControlServo(void)
+{
+    uint16_t angle_1 = 0, angle_2 = 0;
+    
+    angle_1 = (bufferOfDataReceive[startIndex + 2] - '0') * 100 + (bufferOfDataReceive[startIndex + 3] - '0') * 10 + (bufferOfDataReceive[startIndex + 4] - '0');
+    angle_2 = (bufferOfDataReceive[startIndex + 6] - '0') * 100 + (bufferOfDataReceive[startIndex + 7] - '0') * 10 + (bufferOfDataReceive[startIndex + 8] - '0');
+    
+    if (angle_1 >= 360)
+        angle_1 = 0;
+    if (angle_2 >= 360)
+        angle_2 = 0;
+    
+    servo_angle(SERVO_1, angle_1);
+    servo_angle(SERVO_2, angle_2);
+}
+
+void ControlLed(void)
+{
+    if (bufferOfDataReceive[startIndex + 1] == '1')
+        Led1On();
+    else
+        Led1Off();
+    
+    if (bufferOfDataReceive[startIndex + 2] == '1')
+        Led2On();
+    else
+        Led2Off();
+    
+    if (bufferOfDataReceive[startIndex + 3] == '1')
+        Led3On();
+    else
+        Led3Off();
+    
+    if (bufferOfDataReceive[startIndex + 4] == '1')
+        Led4On();
+    else
+        Led4Off();
+}
